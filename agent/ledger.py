@@ -38,11 +38,55 @@ rồi gọi verify() phải trả về False.
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
+import json
+from threading import RLock
+
+_LOCK = RLock()
+_GENESIS = "0" * 64
+_REQUIRED = {"ts", "agent_id", "run_id", "tool", "args_hash", "classification", "decision", "reason"}
+
+
+def _hash(entry: dict) -> str:
+    payload = {key: value for key, value in entry.items() if key != "hash"}
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
 def append(entry: dict, path: Path) -> dict:
-    raise NotImplementedError("BƯỚC 3d: implement ledger append")
+    """Append without modifying the caller's dict; serialize writers in this process."""
+    path = Path(path)
+    with _LOCK:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        previous = _GENESIS
+        if path.exists() and path.stat().st_size:
+            if not verify(path):
+                raise ValueError("Refusing to append to a ledger with a broken hash chain")
+            previous = json.loads(path.read_text(encoding="utf-8").splitlines()[-1])["hash"]
+        record = dict(entry)
+        record.pop("hash", None)
+        record["prev_hash"] = previous
+        record["hash"] = _hash(record)
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+        return record
 
 
 def verify(path: Path) -> bool:
-    raise NotImplementedError("BƯỚC 3d: implement ledger verify")
+    path = Path(path)
+    with _LOCK:
+        try:
+            previous = _GENESIS
+            with path.open(encoding="utf-8") as stream:
+                for line in stream:
+                    entry = json.loads(line)
+                    if not isinstance(entry, dict) or not _REQUIRED.issubset(entry):
+                        return False
+                    reason = entry.get("reason")
+                    if not isinstance(reason, str) or not reason.strip():
+                        return False
+                    if entry.get("prev_hash") != previous or entry.get("hash") != _hash(entry):
+                        return False
+                    previous = entry["hash"]
+            return True
+        except (OSError, ValueError, TypeError):
+            return False

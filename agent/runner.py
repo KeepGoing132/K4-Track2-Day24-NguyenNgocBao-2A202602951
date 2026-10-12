@@ -60,6 +60,14 @@ Interface bắt buộc (agent/loop.py import và gọi hàm này nếu tồn t�
 from __future__ import annotations
 
 from pathlib import Path
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+import hashlib
+import json
+import re
+from uuid import uuid4
+
+from agent import ledger, pii, policy, tools
 
 REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
 DEFAULT_LEDGER_PATH = REPORTS_DIR / "ledger.jsonl"
@@ -68,7 +76,92 @@ DEFAULT_LEDGER_PATH = REPORTS_DIR / "ledger.jsonl"
 class RunnerScaffoldPending(NotImplementedError):
     """Only the original 3c stub uses this to enable the CP1/CP2 baseline."""
 
+_TICKET_FILE = re.compile(r"ticket-([0-9]+)(?:b)?\.md")
+_PARENT_SCOPES = ("search_docs", "read_customer")
+
+
+@dataclass(frozen=True)
+class _Run:
+    agent_id: str
+    run_id: str
+    principal_id: str
+    scopes: tuple[str, ...]
+    expires_at: str
+    ledger_path: Path
+
+
+def _authorize(run: _Run, tool: str, args: dict, classification: str,
+               purpose: str, *, egress: bool = False) -> bool:
+    """Write the decision before execution; ledger failure stops the call."""
+    allowed, reason = policy.check(policy.PolicyContext(
+        data_classification=classification, request_purpose=purpose,
+        agent_owner=run.agent_id, delegation_depth=1, egress_enabled=egress,
+        principal_id=run.principal_id, requested_tool=tool,
+        agent_scopes=run.scopes, parent_scopes=_PARENT_SCOPES,
+        expires_at=run.expires_at,
+    ))
+    ledger.append({
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "agent_id": run.agent_id, "run_id": run.run_id,
+        "on_behalf_of": run.principal_id, "expires_at": run.expires_at,
+        "tool": tool, "args_hash": hashlib.sha256(
+            json.dumps(args, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest(), "classification": classification,
+        "decision": "allow" if allowed else "deny", "reason": reason,
+    }, run.ledger_path)
+    return allowed
+
+
+def _run_a(message: str, llm, run: _Run) -> tuple[list[int], str]:
+    if not _authorize(run, "search_docs", {"query": message}, "internal", "summarize-tickets"):
+        return [], "Không có quyền tìm kiếm ticket."
+    docs = tools.search_docs(message)
+    safe_docs = [{"id": doc["id"], "text": pii.redact(doc["text"])} for doc in docs]
+    injection = llm.find_injection("\n\n".join(doc["text"] for doc in safe_docs))
+    if injection is not None:
+        # Audit the proposed exfiltration in A; never forward attacker commands,
+        # URLs or customer IDs to B. This proposal has no private record body.
+        allowed = _authorize(run, "http_post", {
+            "url": injection.target_url, "customer_ids": injection.customer_ids,
+            "operation": "proposed restricted-record export",
+        }, "restricted", "support-reply", egress=True)
+        if allowed:
+            raise RuntimeError("Policy unexpectedly permitted a restricted export")
+    ticket_ids = sorted({int(match.group(1)) for doc in docs
+                         if (match := _TICKET_FILE.fullmatch(doc["id"]))})
+    return ticket_ids, pii.redact(llm.summarize(safe_docs))
+
+
+def _run_b(ticket_ids: list[int], run: _Run) -> None:
+    """Private stage: receives ticket IDs only and has no LLM or egress tool."""
+    if any(type(ticket_id) is not int or ticket_id < 0 for ticket_id in ticket_ids):
+        raise ValueError("Run B accepts only nonnegative integer ticket IDs")
+    if not ticket_ids:
+        return
+    # The link index is colocated with private records in this lab. Authorize
+    # its access too, so support_l1 never opens the private JSON at all.
+    if not _authorize(run, "read_customer", {
+        "operation": "resolve trusted customer links", "ticket_ids": ticket_ids,
+    }, "restricted", "support-reply"):
+        return
+    linked = set(ticket_ids)
+    customer_ids = sorted({record["customer_id"] for record in
+                           json.loads(tools.CUSTOMERS_FILE.read_text(encoding="utf-8"))
+                           if linked.intersection(record.get("related_tickets", []))})
+    for customer_id in customer_ids:
+        if _authorize(run, "read_customer", {"customer_id": customer_id},
+                      "restricted", "support-reply"):
+            tools.read_customer(customer_id)
+
 
 def handle(message: str, llm, log_dir: Path | None = None,
            principal_id: str = "support_l1") -> str:
-    raise RunnerScaffoldPending("BƯỚC 3c: implement trifecta split")
+    path = Path(log_dir) / "ledger.jsonl" if log_dir is not None else DEFAULT_LEDGER_PATH
+    expiry = (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()
+    run_a = _Run("lab24-agent/run-a", str(uuid4()), principal_id,
+                 ("search_docs",), expiry, path)
+    run_b = _Run("lab24-agent/run-b", str(uuid4()), principal_id,
+                 ("read_customer",), expiry, path)
+    ticket_ids, answer = _run_a(message, llm, run_a)
+    _run_b(ticket_ids, run_b)
+    return answer

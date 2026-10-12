@@ -1,10 +1,20 @@
-# Compliance mapping — điền trong checkpoint 5
+# Compliance mapping — checkpoint 5
 
-| Nguồn / yêu cầu | Control đã làm | Evidence file:dòng | Giới hạn |
+Đối chiếu nguồn ngày **12/10/2026**, trực tiếp trên ảnh trang của ba bản PDF ký chính thức từ Cổng thông tin Chính phủ. Các bản này là tài liệu scan, không có text layer; đã render và đọc trang liên quan. `reports/legal-sources/manifest.json` lưu URL gốc, số trang, ngày truy cập và SHA256 để tải lại/đối chiếu. PDF đã tải và ảnh xem nằm trong cache `.venv/legal-review/`, ngoài bài nộp; bài nộp không sao chép chữ ký hay thông tin định danh từ bản công bố. Các liên hệ control dưới đây là đánh giá kỹ thuật trong lab, không phải kết luận hệ thống đã tuân thủ toàn bộ pháp luật.
+
+| Nguồn / trạng thái đối chiếu | Control kỹ thuật liên quan | Evidence file:dòng | Giới hạn |
 |---|---|---|---|
-| Luật 91/2025/QH15 | | | |
-| NĐ 356/2025/NĐ-CP | | | |
-| Luật AI 134/2025/QH15 | | | |
-| OWASP ASI01, ASI03, ASI04 | | | |
+| [Luật 91/2025/QH15 — Điều 3 khoản 2, 4, 5](https://datafiles.chinhphu.vn/cpp/files/vbpq/2025/7/91qh.signed.pdf#page=2), trang PDF 2: xử lý trong phạm vi/mục đích rõ ràng; biện pháp bảo vệ; chủ động phòng ngừa/phát hiện/ngăn chặn | Kiểm purpose, che PII, chặn egress restricted và replay phát hiện rò rỉ | `agent/pii.py:46`, `agent/pii.py:58`, `agent/policy.py:61`, `agent/policy.py:84`, `tests/test_pii.py:30` | Đây là một phần biện pháp kỹ thuật; chưa triển khai căn cứ xử lý, consent, retention và quyền chủ thể |
+| [NĐ 356/2025/NĐ-CP — Điều 4 khoản 2](https://datafiles.chinhphu.vn/cpp/files/vbpq/2026/01/356-nd.signed.pdf#page=3), trang PDF 3: phân quyền giới hạn truy cập, quy trình xử lý và bảo mật khi xử lý dữ liệu nhạy cảm | OBO/scopes, kiểm trước đọc store, deny egress, audit quyết định | `agent/policy.py:86`, `agent/runner.py:143`, `agent/runner.py:152`, `agent/ledger.py:55`, `reports/ledger.jsonl:1` | Restricted là nhãn bảo mật của lab, không đồng nghĩa mọi trường trong fixture đều là dữ liệu nhạy cảm pháp lý |
+| [Luật AI 134/2025/QH15 — Điều 4 khoản 2, 3](https://datafiles.chinhphu.vn/cpp/files/vbpq/2026/01/luat134.signed.pdf#page=2), trang PDF 2: duy trì kiểm soát/can thiệp của con người, an toàn dữ liệu, khả năng kiểm tra/giám sát và trách nhiệm giải trình | Người dùng có scope giới hạn; tách run, TTL, policy reason, ledger và replay | `agent/runner.py:93`, `agent/runner.py:135`, `agent/runner.py:157`, `reports/ledger-check.json:1`, `reports/replay-after.json:1` | Mock, chưa có authentication, sandbox OS, cơ chế can thiệp khi chạy hay đánh giá rủi ro triển khai thật |
+| OWASP ASI01 — Agent Goal Hijack | Chỉ ID ticket từ filename qua B; không lấy customer ID/URL từ attacker vào private stage | `agent/runner.py:130`, `agent/runner.py:135`, `tests/test_split.py:75` | Hai run cùng process; cần sandbox/thông tin nguồn tin cậy khi triển khai thật |
+| OWASP ASI03 — Identity & Privilege Abuse | Principal ∩ agent scopes ∩ parent scopes, mục đích và TTL; kiểm trước đọc cả index và hồ sơ | `agent/policy.py:68`, `agent/policy.py:86`, `agent/runner.py:143`, `tests/test_obo.py:51`, `tests/test_boundaries.py:12` | Principal giả lập từ JSON, chưa có authentication production |
+| OWASP ASI04 — Agentic Supply Chain Vulnerabilities | Gitleaks pin, hash lock, scan history/current và incident response | `.pre-commit-config.yaml:3`, `requirements.lock:7`, `reports/gitleaks-history.json:1`, `reports/secrets-incident.md:3` | Pin/hash không chứng minh package sạch, không thay thế rotate credential |
 
-Chỉ ghi điều khoản cụ thể khi đã đối chiếu văn bản gốc. Mô phỏng kỹ thuật không tự chứng minh tuân thủ pháp luật.
+Tên và phạm vi ba mục OWASP đã đối chiếu với [bài công bố chính thức OWASP Agentic Top 10](https://genai.owasp.org/2025/12/09/owasp-top-10-for-agentic-applications-the-benchmark-for-agentic-security-in-the-age-of-autonomous-ai/). Việc nối từng control vào mục OWASP là suy luận kỹ thuật của báo cáo.
+
+Đã đọc thêm Điều 3 khoản 1, 7 NĐ 356/2025 (trang PDF 2): họ tên, số điện thoại và số định danh cá nhân thuộc danh mục cơ bản. Điều 4 khoản 1 điểm k (trang PDF 3) liệt kê thông tin tài chính/ngân hàng trong các bối cảnh quy định. Không suy ra mọi STK đứng riêng đều nhạy cảm chỉ từ regex; lab chủ động áp dụng mức restricted cho toàn hồ sơ có các trường này để bảo vệ thận trọng.
+
+Điều 4 Luật 91/2025 (trang PDF 3) còn quy định quyền chủ thể, trong đó có xem/chỉnh sửa/xóa/hạn chế xử lý. Bài lab không triển khai đầy đủ các quyền này. TTL ở policy là thời hạn quyền của run, không phải thời hạn lưu trữ dữ liệu; hash arguments không phải khử nhận dạng hồ sơ theo Điều 2 khoản 11 của Luật.
+
+Evidence egress: các dòng `tool=http_post`, `decision=deny` trong `reports/ledger.jsonl` là đề xuất xuất hồ sơ từ lure, bị kiểm tại Run A trước khi có body PII. Run B vẫn đọc hồ sơ hợp lệ cho dpo, nhưng không có egress. `reports/attack-after.log` rỗng sau replay chủ động, tách biệt với reset sink của pytest.

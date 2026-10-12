@@ -35,6 +35,11 @@ không phải xác thực người dùng production.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+
+PRINCIPALS_FILE = Path(__file__).resolve().parent.parent / "data" / "principals.json"
 
 
 @dataclass(frozen=True)
@@ -52,4 +57,35 @@ class PolicyContext:
 
 
 def check(context: PolicyContext) -> tuple[bool, str]:
-    raise NotImplementedError("BƯỚC 3b: implement policy check")
+    """Fail closed; fixture identity is simulation, not authentication."""
+    if context.data_classification == "restricted" and context.egress_enabled:
+        return False, "Restricted data cannot be used in a run with egress enabled"
+    if context.data_classification not in {"public", "internal", "restricted"}:
+        return False, "Unknown data classification"
+    if not context.agent_owner or context.delegation_depth < 0:
+        return False, "Invalid agent identity or delegation depth"
+    try:
+        expiry = datetime.fromisoformat(context.expires_at.replace("Z", "+00:00"))
+        if expiry.tzinfo is None:
+            return False, "Expiry must include a timezone"
+        if expiry <= datetime.now(timezone.utc):
+            return False, "Run authorization has expired"
+    except (ValueError, TypeError, AttributeError):
+        return False, "Missing or invalid authorization expiry"
+    try:
+        principals = json.loads(PRINCIPALS_FILE.read_text(encoding="utf-8"))
+        principal = principals.get(context.principal_id)
+        if not isinstance(principal, dict):
+            return False, "Unknown principal in trusted lab fixture"
+        allowed_tools = set(principal["allowed_tools"])
+        purposes = set(principal["purposes"])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return False, "Trusted principal fixture is unavailable or invalid"
+    if context.request_purpose not in purposes:
+        return False, "Purpose is not authorized for this principal"
+    effective = allowed_tools.intersection(context.agent_scopes)
+    if context.delegation_depth > 0:
+        effective.intersection_update(context.parent_scopes)
+    if not context.requested_tool or context.requested_tool not in effective:
+        return False, "Tool is outside principal, agent, or delegated parent scopes"
+    return True, "Principal, purpose, scopes and authorization expiry permit this tool"

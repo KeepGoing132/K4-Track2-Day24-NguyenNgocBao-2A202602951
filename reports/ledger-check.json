@@ -1,0 +1,9 @@
+{
+  "verify": true,
+  "tampered_verify": false,
+  "entries": 135,
+  "http_post_denied": 10,
+  "raw_pii_in_ledger": false,
+  "before_bytes": 1495,
+  "after_bytes": 0
+}

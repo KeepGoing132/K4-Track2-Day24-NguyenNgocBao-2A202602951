@@ -1,0 +1,26 @@
+[
+  {
+    "id": "law-91-2025",
+    "url": "https://datafiles.chinhphu.vn/cpp/files/vbpq/2025/7/91qh.signed.pdf",
+    "sha256": "c3b87f994cedcedb69d38c590dcca2bb7700aab65e518a2a3a5ffbf22048b9ee",
+    "pages": 23,
+    "access_date": "2026-10-12",
+    "local_cache_excluded_from_submission": ".venv/legal-review/law-91-2025.pdf"
+  },
+  {
+    "id": "decree-356-2025",
+    "url": "https://datafiles.chinhphu.vn/cpp/files/vbpq/2026/01/356-nd.signed.pdf",
+    "sha256": "5b36a060c22db1df6c32b8c66da63b0c36571a1f7fa01765e719baac215b6c12",
+    "pages": 71,
+    "access_date": "2026-10-12",
+    "local_cache_excluded_from_submission": ".venv/legal-review/decree-356-2025.pdf"
+  },
+  {
+    "id": "law-ai-134-2025",
+    "url": "https://datafiles.chinhphu.vn/cpp/files/vbpq/2026/01/luat134.signed.pdf",
+    "sha256": "53be2f9993e5060cc0ce723fc506d6535c9358978dbbeff11324c8d6236cae69",
+    "pages": 20,
+    "access_date": "2026-10-12",
+    "local_cache_excluded_from_submission": ".venv/legal-review/law-ai-134-2025.pdf"
+  }
+]
