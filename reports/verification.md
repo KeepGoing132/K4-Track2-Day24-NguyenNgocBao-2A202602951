@@ -6,9 +6,10 @@
 |---|---|---|
 | Môi trường | Windows native / PowerShell, Python 3.11.9; venv riêng, pytest 9.1.1 | `.venv/` không thuộc bài nộp |
 | Gitleaks version | 8.30.1; checksum archive khớp release chính thức | `reports/secrets-incident.md` |
-| `python -m pytest tests/ -q -s` | **41 passed in 5.51s**, không skip; 33 test có sẵn + 8 case bổ sung | `reports/pytest.log` |
+| `python -m pytest tests/ -q -s` | **42 passed in 5.27s**, không skip; 33 test có sẵn + 9 case bổ sung | `reports/pytest.log` |
+| Bản xuất riêng từ Git index | **42 passed in 6.04s**; ledger trong bản xuất verify=True, attack-after.log 0 byte | `reports/audit-checkout.log` |
 | PII trên test set | gold=118, pred=118, tp=118; precision=1.000, recall=1.000 | `reports/pytest.log` |
-| Lure preflight | **4/4 sẵn sàng**; từng file của cặp 904 riêng trả None, ghép cặp nhận diện | `injection-corpus.md`, `corpus/ticket-90*.md` |
+| Lure preflight | **4/4 sẵn sàng**; từng file của cặp 904 riêng trả None, ghép cặp nhận diện | `reports/check-lure.log`, `injection-corpus.md`, `corpus/ticket-90*.md` |
 | Baseline replay | Query gốc + 4 biến thể, mỗi lần 1 request chứa PII synthetic KH-000999 | `reports/replay-before.json`, `attack-before.log` (1495 byte / 5 dòng) |
 | Contained replay | Query gốc + 4 biến thể × support_l1/dpo = 10 lần; **0 request** | `reports/replay-after.json`, `attack-after.log` (0 byte) |
 | Ledger | **verify=True**, 135 dòng có reason/OBO/TTL; 10 http_post deny; không có PII thô | `reports/ledger-check.json`, `ledger.jsonl` |
@@ -28,6 +29,8 @@ Không còn test FAIL/SKIP hay lỗi cài dependency/hook. Quét thư mục ban 
 Đã khắc phục lỗi truy cập VBPL bằng bản PDF ký trên Cổng thông tin Chính phủ: đọc Điều 3 khoản 2, 4, 5 Luật 91/2025 (trang 2), Điều 4 khoản 2 NĐ 356/2025 (trang 3), Điều 4 khoản 2, 3 Luật AI 134/2025 (trang 2), cùng các mục phân loại và quyền chủ thể được ghi trong mapping. PDF gốc/URL/checksum lưu tại `reports/legal-sources/manifest.json`. Không kết luận tuân thủ toàn bộ pháp luật từ kết quả test.
 
 Hai run tách context/tool scope bằng code trong cùng process; chưa có sandbox OS. Principal JSON/CLI là mô phỏng. Hash chain thiếu mốc tin cậy ngoài file và chỉ khóa thread cùng process. Chưa kiểm model thật hoặc Linux/WSL; evidence ở đây chạy bằng mock trên Windows native.
+
+Rà soát sau bàn giao phát hiện một lỗi biên ngoài test bắt buộc: ledger JSONL hợp lệ nhưng thiếu newline cuối sẽ bị nối hai JSON khi append. Đã sửa bằng cách thêm separator khi cần, giữ nguyên dữ liệu/hash cũ; `tests/test_ledger_edges.py` kiểm tra trường hợp này. README cũng đã được cập nhật để mô tả bản đã triển khai và lệnh chạy trên Windows. Không sửa các test bắt buộc của đề. Phần bonus tùy chọn chưa triển khai; báo cáo này đánh giá phạm vi bắt buộc.
 
 ## Chạy lại trong PowerShell
 

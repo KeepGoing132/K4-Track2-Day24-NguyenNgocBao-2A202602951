@@ -1,0 +1,4 @@
+Validation of files exported from Git index (isolated checkout)
+..........................................                               [100%]
+42 passed in 6.04s
+Exported ledger and empty after log: valid

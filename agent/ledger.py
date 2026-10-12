@@ -58,15 +58,20 @@ def append(entry: dict, path: Path) -> dict:
     with _LOCK:
         path.parent.mkdir(parents=True, exist_ok=True)
         previous = _GENESIS
+        needs_separator = False
         if path.exists() and path.stat().st_size:
             if not verify(path):
                 raise ValueError("Refusing to append to a ledger with a broken hash chain")
-            previous = json.loads(path.read_text(encoding="utf-8").splitlines()[-1])["hash"]
+            contents = path.read_text(encoding="utf-8")
+            previous = json.loads(contents.splitlines()[-1])["hash"]
+            needs_separator = not contents.endswith("\n")
         record = dict(entry)
         record.pop("hash", None)
         record["prev_hash"] = previous
         record["hash"] = _hash(record)
         with path.open("a", encoding="utf-8") as stream:
+            if needs_separator:
+                stream.write("\n")
             stream.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
         return record
 

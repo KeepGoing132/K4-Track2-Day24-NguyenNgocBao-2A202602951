@@ -1,8 +1,21 @@
 # Bài cá nhân — K4 Track 2 Day 24: Data Governance & Security (L3)
 
-**Lớp L3 · dự kiến 12/10/2026 · 120 phút trên lớp.** Repo này là đề bài cho sinh viên; bốn control trong `agent/` là scaffold, không phải đáp án. Bài dùng dữ liệu tổng hợp và được chấm bằng `--mock`, không cần API key, cloud hay GPU.
+**Bản bài làm đã hoàn thiện cho lớp L3 ngày 12/10/2026.** Bốn control trong `agent/` đã được triển khai: PII gate, policy/OBO, trifecta split và ledger hash chain. Bài dùng dữ liệu tổng hợp và được kiểm thử bằng `--mock`, không cần API key, cloud hay GPU.
 
-Bạn sẽ tự gây rò rỉ PII ở agent chưa có kiểm soát, viết PII gate, policy, trifecta split và ledger, rồi chứng minh cùng payload đã bị chặn. Hai checkpoint L3 bổ sung là **agent hành động thay người dùng (OBO)** và **supply chain & secrets**. Mục tiêu là giữ chức năng hợp lệ cho `dpo` trong khi `support_l1` không đọc record chứa CCCD/STK.
+Đã lưu evidence rò rỉ PII tổng hợp ở baseline và replay cùng bốn payload sau containment. Hai checkpoint **agent hành động thay người dùng (OBO)** và **supply chain & secrets** cũng đã hoàn tất. `dpo` vẫn đọc hồ sơ gắn với ticket hợp lệ; `support_l1` bị chặn trước khi mở private store. Kết quả, giới hạn và cách chạy lại nằm trong [reports/verification.md](reports/verification.md); đối chiếu văn bản gốc nằm trong [compliance mapping](reports/compliance-mapping.md).
+
+## Chạy bản hoàn thiện trên Windows / PowerShell
+
+```powershell
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.lock
+$env:PYTHONIOENCODING = 'utf-8'
+.venv\Scripts\python.exe -m pytest tests/ -q
+.venv\Scripts\python.exe -m agent.check_lure 'corpus/ticket-90*.md'
+.venv\Scripts\python.exe -m agent.loop --mock --as dpo "Tổng hợp các ticket còn mở tuần này"
+```
+
+Agent đã containment không cần sink chạy vì không thực thi egress. Evidence đã được commit trong `reports/attack-before.log`, `reports/attack-after.log` và `reports/ledger.jsonl`. Phần bonus trong rubric là tùy chọn, chưa triển khai.
 
 ## Đọc theo thứ tự
 
@@ -13,7 +26,7 @@ Bạn sẽ tự gây rò rỉ PII ở agent chưa có kiểm soát, viết PII g
 
 ## Chuẩn bị **trước buổi học** (không tính vào 120 phút)
 
-Chạy trong **WSL2 Ubuntu, macOS hoặc Linux**, Python 3.11+. Windows native chưa được pilot. Tại thư mục repo:
+Đề gốc khuyến nghị **WSL2 Ubuntu, macOS hoặc Linux**, Python 3.11+. Bản bài làm này đã được kiểm trên Windows native / Python 3.11.9; chưa xác nhận trên Linux/WSL. Các lệnh preflight của đề gốc tại thư mục repo:
 
 ```bash
 python3 -m venv .venv
@@ -34,7 +47,7 @@ Trước khi hoàn thiện `agent/runner.py`, CLI dùng baseline có chủ đíc
 ## Cấu trúc chính
 
 - `agent/loop.py`, `agent/tools.py`, `agent/llm.py`: khung có sẵn; giữ allowlist `127.0.0.1:10024`.
-- `agent/pii.py`, `agent/policy.py`, `agent/runner.py`, `agent/ledger.py`: sinh viên hoàn thiện.
+- `agent/pii.py`, `agent/policy.py`, `agent/runner.py`, `agent/ledger.py`: các control đã hoàn thiện.
 - `corpus/`, `data/`: dữ liệu tổng hợp. `ticket-901.md` là lure mẫu.
 - `tests/`: test bắt buộc, gồm `test_obo.py` và `test_supply_chain.py`.
 - `reports/`: bằng chứng do sinh viên tạo; xem SUBMISSION.
